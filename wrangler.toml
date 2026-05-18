@@ -1,0 +1,11 @@
+name = "davesharp-auction"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "dist"
+
+# D1 database binding. Create the database first with:
+#   wrangler d1 create davesharp-auction
+# then paste the database_id it prints below.
+[[d1_databases]]
+binding = "DB"
+database_name = "davesharp-auction"
+database_id = "24e931ef-c8c6-48a8-bbaa-e02996c5af47"

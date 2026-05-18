@@ -1,0 +1,280 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout>
+  <header class="bar">
+    <div class="bar-mark">
+      Dave Sharp
+      <span>Live Auction</span>
+    </div>
+    <div class="bar-live" id="liveFlag">
+      <span class="dot"></span><span id="liveLabel">Loading</span>
+    </div>
+  </header>
+
+  <main class="auction">
+    <!-- Painting -->
+    <section class="painting">
+      <img id="paintingImg" alt="" style="display:none" />
+      <div class="placeholder" id="paintingPlaceholder">Painting image</div>
+    </section>
+
+    <!-- Bid panel -->
+    <section class="panel">
+      <div class="eyebrow" id="phaseEyebrow">Auction</div>
+      <h1 class="painting-title" id="paintingTitle">&nbsp;</h1>
+      <div class="painting-meta" id="paintingMeta"></div>
+      <p class="painting-story" id="paintingStory"></p>
+
+      <div class="bidbox">
+        <div class="bidbox-row">
+          <div>
+            <div class="bid-label" id="bidLabel">Current bid</div>
+            <div class="bid-amount" id="bidAmount">—</div>
+            <div class="bid-sub" id="bidSub"></div>
+          </div>
+          <div style="text-align:right">
+            <div class="bid-label" id="cdLabel">Closes in</div>
+            <div class="countdown" id="countdown">—</div>
+          </div>
+        </div>
+
+        <!-- LIVE: bid form -->
+        <div id="bidForm" style="display:none">
+          <div class="divider"></div>
+          <form id="form">
+            <div class="field-row">
+              <div class="field">
+                <label for="f-name">Your name</label>
+                <input type="text" id="f-name" required />
+              </div>
+              <div class="field">
+                <label for="f-phone">Phone</label>
+                <input type="tel" id="f-phone" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="f-email">Email</label>
+              <input type="email" id="f-email" required />
+            </div>
+            <div class="field amount">
+              <label for="f-amount" id="amountLabel">Your bid (£)</label>
+              <input type="number" id="f-amount" required />
+            </div>
+            <label class="commit">
+              <input type="checkbox" id="f-commit" required />
+              <span>I understand a winning bid is a commitment to buy, payable by invoice.</span>
+            </label>
+            <button type="submit" class="btn" id="bidBtn">Place bid</button>
+          </form>
+          <div class="msg" id="msg"></div>
+        </div>
+
+        <!-- SCHEDULED / CLOSED: state note -->
+        <div id="stateBlock" style="display:none">
+          <div class="divider"></div>
+          <p class="state-note" id="stateNote"></p>
+        </div>
+      </div>
+
+      <div class="rules" id="rules"></div>
+    </section>
+  </main>
+
+  <script is:inline>
+    (function () {
+      var POLL_MS = 5000;
+      var serverOffset = 0;       // server clock minus local clock
+      var state = null;
+      var cdTimer = null;
+
+      var $ = function (id) { return document.getElementById(id); };
+      var money = function (n) { return '\u00A3' + Number(n || 0).toLocaleString('en-GB'); };
+
+      function serverNow() { return Date.now() + serverOffset; }
+
+      function nextMinBid() {
+        if (!state) return 0;
+        return Math.max(state.startingBid, (state.currentBid || 0) + state.minIncrement);
+      }
+
+      function render() {
+        if (!state) return;
+        var p = state.painting || {};
+
+        $('paintingTitle').textContent = p.title || 'Original Painting';
+        $('paintingMeta').textContent = [p.size, p.medium].filter(Boolean).join('  ·  ');
+        $('paintingStory').textContent = p.story || '';
+
+        var img = $('paintingImg');
+        if (p.image) {
+          img.onerror = function () {
+            img.style.display = 'none';
+            $('paintingPlaceholder').style.display = 'block';
+          };
+          img.onload = function () {
+            img.style.display = 'block';
+            $('paintingPlaceholder').style.display = 'none';
+          };
+          img.src = p.image;
+          img.alt = p.title || '';
+        }
+
+        var flag = $('liveFlag');
+        if (state.phase === 'live') {
+          flag.className = 'bar-live is-live';
+          $('liveLabel').textContent = 'Auction live';
+        } else if (state.phase === 'closed') {
+          flag.className = 'bar-live';
+          $('liveLabel').textContent = 'Auction ended';
+        } else {
+          flag.className = 'bar-live';
+          $('liveLabel').textContent = 'Opening soon';
+        }
+
+        var hasBids = (state.currentBid || 0) > 0;
+        $('bidAmount').textContent = hasBids ? money(state.currentBid) : money(state.startingBid);
+        $('bidLabel').textContent = hasBids ? 'Current bid' : 'Starting bid';
+
+        var sub = '';
+        if (hasBids) {
+          sub = state.bidCount + ' bid' + (state.bidCount === 1 ? '' : 's');
+          if (state.leader) sub += '  ·  high bidder ' + state.leader;
+        } else {
+          sub = 'No bids yet — be the first';
+        }
+        $('bidSub').innerHTML = sub;
+
+        $('rules').innerHTML =
+          'Minimum increment ' + money(state.minIncrement) + '  ·  ' +
+          'a bid in the final 10 minutes extends the close by 10 minutes<br/>' +
+          'Winning bidder is invoiced directly  ·  bids are binding';
+
+        // phase-specific blocks
+        var bidForm = $('bidForm'), stateBlock = $('stateBlock');
+        if (state.phase === 'live') {
+          bidForm.style.display = 'block';
+          stateBlock.style.display = 'none';
+          $('phaseEyebrow').textContent = 'Bidding open';
+          $('cdLabel').textContent = 'Closes in';
+          var amt = $('f-amount');
+          if (document.activeElement !== amt) {
+            amt.value = nextMinBid();
+            amt.min = nextMinBid();
+          }
+          $('amountLabel').textContent = 'Your bid (£) — minimum ' + money(nextMinBid());
+        } else if (state.phase === 'closed') {
+          bidForm.style.display = 'none';
+          stateBlock.style.display = 'block';
+          $('phaseEyebrow').textContent = 'Auction closed';
+          $('cdLabel').textContent = 'Status';
+          $('countdown').textContent = 'Ended';
+          $('stateNote').textContent = hasBids
+            ? 'Auction ended. Winning bid ' + money(state.currentBid) +
+              (state.leader ? ' by ' + state.leader : '') + '. The winner will be contacted by email.'
+            : 'This auction has ended with no bids.';
+        } else {
+          bidForm.style.display = 'none';
+          stateBlock.style.display = 'block';
+          $('phaseEyebrow').textContent = 'Opening soon';
+          $('cdLabel').textContent = 'Opens in';
+          $('stateNote').textContent = 'Bidding has not opened yet. The countdown above shows time until it goes live.';
+        }
+      }
+
+      function updateCountdown() {
+        if (!state) return;
+        var target = state.phase === 'scheduled'
+          ? Date.parse(state.opensAt)
+          : Date.parse(state.closesAt);
+        var diff = target - serverNow();
+        var el = $('countdown');
+
+        if (state.phase === 'closed') { el.textContent = 'Ended'; return; }
+        if (diff <= 0) { el.textContent = '00:00:00'; loadState(); return; }
+
+        var s = Math.floor(diff / 1000);
+        var d = Math.floor(s / 86400); s -= d * 86400;
+        var h = Math.floor(s / 3600); s -= h * 3600;
+        var m = Math.floor(s / 60); s -= m * 60;
+        var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+        el.textContent = (d > 0 ? d + 'd ' : '') + pad(h) + ':' + pad(m) + ':' + pad(s);
+        el.className = (state.phase === 'live' && diff < 10 * 60 * 1000) ? 'countdown urgent' : 'countdown';
+      }
+
+      async function loadState() {
+        try {
+          var res = await fetch('/api/state', { cache: 'no-store' });
+          if (!res.ok) throw new Error('state ' + res.status);
+          var s = await res.json();
+          serverOffset = Date.parse(s.serverTime) - Date.now();
+          state = s;
+          render();
+          updateCountdown();
+        } catch (e) {
+          $('liveLabel').textContent = 'Connection issue';
+        }
+      }
+
+      function showMsg(text, kind) {
+        var m = $('msg');
+        m.textContent = text;
+        m.className = 'msg show ' + kind;
+      }
+
+      async function submitBid(e) {
+        e.preventDefault();
+        var btn = $('bidBtn');
+        var payload = {
+          name: $('f-name').value.trim(),
+          email: $('f-email').value.trim(),
+          phone: $('f-phone').value.trim(),
+          amount: Number($('f-amount').value),
+          committed: $('f-commit').checked,
+        };
+        btn.disabled = true;
+        btn.textContent = 'Placing bid…';
+        try {
+          var res = await fetch('/api/bid', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          var data = await res.json();
+          if (data.ok) {
+            showMsg('You are the high bidder at ' + money(data.currentBid) + '.', 'ok');
+            $('f-commit').checked = false;
+          } else if (data.error === 'outbid' || data.error === 'too_low') {
+            showMsg('Bid not high enough — the current bid is now ' +
+              money(data.currentBid || (data.minBid - state.minIncrement)) +
+              '. Try again above.', 'err');
+          } else if (data.error === 'over_cap') {
+            showMsg('That exceeds the maximum bid of ' + money(data.maxBid) + '.', 'err');
+          } else if (data.error === 'closed') {
+            showMsg('The auction has closed.', 'err');
+          } else if (data.error === 'not_open') {
+            showMsg('Bidding has not opened yet.', 'err');
+          } else if (data.error === 'email_invalid') {
+            showMsg('Please enter a valid email address.', 'err');
+          } else if (data.error === 'not_committed') {
+            showMsg('Please tick the box to confirm your bid is binding.', 'err');
+          } else {
+            showMsg('Sorry — your bid could not be placed. Please try again.', 'err');
+          }
+        } catch (err) {
+          showMsg('Network error — please try again.', 'err');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Place bid';
+          loadState();
+        }
+      }
+
+      document.getElementById('form').addEventListener('submit', submitBid);
+      loadState();
+      setInterval(loadState, POLL_MS);
+      cdTimer = setInterval(updateCountdown, 1000);
+    })();
+  </script>
+</Layout>
