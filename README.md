@@ -30,9 +30,15 @@ If Stage 1 is already deployed, do these four things.
 
     npx wrangler d1 execute davesharp-auction --remote --file=migration-stage2.sql
 
-This adds the verification, session and status columns. After it runs, your
-existing auction row becomes `status = 'draft'` (hidden) — you publish it again
-from the admin panel in step 4.
+This adds the verification and status columns, and the per-device `sessions`
+table. After it runs, your existing auction row becomes `status = 'draft'`
+(hidden) — you publish it again from the admin panel in step 4.
+
+If you already ran an earlier version of `migration-stage2.sql` (before the
+multi-device update), run `migration-sessions.sql` instead — it just adds the
+new `sessions` table:
+
+    npx wrangler d1 execute davesharp-auction --remote --file=migration-sessions.sql
 
 ### 2. Add the Resend API key
 

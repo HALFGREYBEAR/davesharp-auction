@@ -35,7 +35,6 @@ CREATE TABLE IF NOT EXISTS bidders (
   verify_code          TEXT,
   verify_code_expires  TEXT,
   verify_attempts      INTEGER NOT NULL DEFAULT 0,
-  session_token        TEXT,
   verified_at          TEXT,
   last_outbid_email_at TEXT,
   created_at           TEXT
@@ -51,6 +50,15 @@ CREATE TABLE IF NOT EXISTS bids (
   FOREIGN KEY (bidder_id) REFERENCES bidders(id)
 );
 
+-- One row per verified device/browser. A bidder can hold several at once,
+-- so registering on a second device does not log the first one out.
+CREATE TABLE IF NOT EXISTS sessions (
+  token      TEXT PRIMARY KEY,
+  bidder_id  INTEGER NOT NULL,
+  created_at TEXT,
+  FOREIGN KEY (bidder_id) REFERENCES bidders(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_bids_amount ON bids(amount);
 CREATE INDEX IF NOT EXISTS idx_bidders_email ON bidders(email);
-CREATE INDEX IF NOT EXISTS idx_bidders_session ON bidders(session_token);
+CREATE INDEX IF NOT EXISTS idx_sessions_bidder ON sessions(bidder_id);

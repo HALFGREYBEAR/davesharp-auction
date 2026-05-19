@@ -28,12 +28,18 @@ export async function onRequestPost({ env, request }) {
     return json({ error: 'code_wrong' }, 409);
   }
 
+  // Mark verified and clear the code. The session is a separate row, so a
+  // bidder can be verified on several devices at once.
   const token = randomToken();
+  const nowIso = new Date().toISOString();
   await env.DB.prepare(
-    `UPDATE bidders SET verified = 1, verified_at = ?, session_token = ?,
+    `UPDATE bidders SET verified = 1, verified_at = ?,
         verify_code = NULL, verify_code_expires = NULL, verify_attempts = 0
       WHERE id = ?`
-  ).bind(new Date().toISOString(), token, b.id).run();
+  ).bind(nowIso, b.id).run();
+  await env.DB.prepare(
+    'INSERT INTO sessions (token, bidder_id, created_at) VALUES (?, ?, ?)'
+  ).bind(token, b.id, nowIso).run();
 
   return json(
     { ok: true, name: b.name, firstName: (b.name || '').trim().split(/\s+/)[0] },

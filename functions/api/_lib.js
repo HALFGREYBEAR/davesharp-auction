@@ -42,11 +42,14 @@ export function randomCode() {
 }
 
 // Returns the verified bidder for the request's session cookie, or null.
+// Sessions are per-device — a bidder may have several active at once.
 export async function getSessionBidder(env, request) {
   const token = parseCookies(request)[SESSION_COOKIE];
   if (!token) return null;
   const b = await env.DB.prepare(
-    'SELECT * FROM bidders WHERE session_token = ? AND verified = 1'
+    `SELECT b.* FROM bidders b
+       JOIN sessions s ON s.bidder_id = b.id
+      WHERE s.token = ? AND b.verified = 1`
   ).bind(token).first();
   return b || null;
 }
