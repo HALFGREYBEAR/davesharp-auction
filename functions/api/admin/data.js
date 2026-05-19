@@ -15,7 +15,7 @@ export async function onRequestGet({ env, request }) {
   ).all()).results || [];
 
   const bidders = (await env.DB.prepare(
-    `SELECT id, name, email, phone, verified, verified_at, created_at
+    `SELECT id, name, email, phone, verified, banned, verified_at, created_at
        FROM bidders ORDER BY id DESC`
   ).all()).results || [];
 

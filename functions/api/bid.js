@@ -10,9 +10,10 @@ const OUTBID_THROTTLE_MS = 3 * 60 * 1000; // one outbid email per bidder per 3 m
 export async function onRequestPost(ctx) {
   const { env, request } = ctx;
 
-  // --- Identity: must be a verified bidder ---
+  // --- Identity: must be a verified, non-banned bidder ---
   const bidder = await getSessionBidder(env, request);
   if (!bidder) return json({ error: 'not_verified' }, 401);
+  if (bidder.banned) return json({ error: 'banned' }, 403);
 
   let body;
   try { body = await request.json(); } catch { return json({ error: 'bad_request' }, 400); }

@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS bidders (
   email                TEXT NOT NULL UNIQUE,
   phone                TEXT,
   verified             INTEGER NOT NULL DEFAULT 0,
+  banned               INTEGER NOT NULL DEFAULT 0,
   verify_code          TEXT,
   verify_code_expires  TEXT,
   verify_attempts      INTEGER NOT NULL DEFAULT 0,

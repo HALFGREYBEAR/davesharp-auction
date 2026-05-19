@@ -218,6 +218,29 @@ export function winEmailContent(amount, title, url) {
   };
 }
 
+// ---- Leader recompute ------------------------------------------------------
+
+// Recomputes the auction's current bid / leader / count from the highest
+// remaining non-voided bid. Used after voiding a bid or banning a bidder.
+export async function recomputeLeader(env) {
+  const top = await env.DB.prepare(
+    'SELECT bidder_id, amount FROM bids WHERE voided = 0 ORDER BY amount DESC, id DESC LIMIT 1'
+  ).first();
+  const count = (await env.DB.prepare(
+    'SELECT COUNT(*) AS c FROM bids WHERE voided = 0'
+  ).first()).c;
+  const nowIso = new Date().toISOString();
+  if (top) {
+    await env.DB.prepare(
+      'UPDATE auction SET current_bid = ?, current_bidder_id = ?, bid_count = ?, updated_at = ? WHERE id = 1'
+    ).bind(top.amount, top.bidder_id, count, nowIso).run();
+  } else {
+    await env.DB.prepare(
+      'UPDATE auction SET current_bid = 0, current_bidder_id = NULL, bid_count = 0, updated_at = ? WHERE id = 1'
+    ).bind(nowIso).run();
+  }
+}
+
 // ---- Finalisation ----------------------------------------------------------
 
 // If the auction has closed and not yet been finalised, flip the flag
