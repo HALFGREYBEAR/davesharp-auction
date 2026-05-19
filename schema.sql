@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS auction (
   current_bid       INTEGER NOT NULL DEFAULT 0,
   current_bidder_id INTEGER,
   bid_count         INTEGER NOT NULL DEFAULT 0,
-  finalized         INTEGER NOT NULL DEFAULT 0,     -- 1 once the winner email has gone out
+  finalized         INTEGER NOT NULL DEFAULT 0,     -- vestigial; superseded by winner_emailed_bidder_id
+  winner_emailed_bidder_id INTEGER,                 -- bidder id the win email was last sent to (NULL = none)
   updated_at        TEXT
 );
 

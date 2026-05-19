@@ -245,16 +245,26 @@ export async function recomputeLeader(env) {
 
 // If the auction has closed and not yet been finalised, flip the flag
 // (race-safe) and email the winner. Safe to call from any request.
+// If the auction has closed, make sure the *current* winner has been emailed.
+// Keyed on the winner's bidder id (not a one-shot flag): a winner change from
+// a late void or ban re-triggers an email to the new winner, while the same
+// winner is never emailed twice. Idempotent and race-safe; safe to call from
+// any request (returns immediately if the auction is not closed).
 export async function finalizeIfClosed(env, request, ctx) {
   const a = await env.DB.prepare('SELECT * FROM auction WHERE id = 1').first();
-  if (!a || phaseOf(a) !== 'closed' || a.finalized) return;
+  if (!a || phaseOf(a) !== 'closed') return;
+  if (!a.current_bidder_id) return; // no bids — no winner to email
 
+  // Compare-and-set: only the request that records THIS winner sends an email.
+  // Different winner than last recorded -> changes 1 row -> send.
+  // Same winner already recorded -> changes 0 rows -> skip (no double email).
   const upd = await env.DB.prepare(
-    'UPDATE auction SET finalized = 1 WHERE id = 1 AND finalized = 0'
-  ).run();
-  if (!upd.meta || upd.meta.changes !== 1) return; // another request got there first
+    `UPDATE auction SET winner_emailed_bidder_id = ?
+       WHERE id = 1
+         AND (winner_emailed_bidder_id IS NULL OR winner_emailed_bidder_id != ?)`
+  ).bind(a.current_bidder_id, a.current_bidder_id).run();
+  if (!upd.meta || upd.meta.changes !== 1) return; // this winner already emailed
 
-  if (!a.current_bidder_id) return; // no bids — nothing to send
   const winner = await env.DB.prepare('SELECT * FROM bidders WHERE id = ?')
     .bind(a.current_bidder_id).first();
   if (!winner) return;

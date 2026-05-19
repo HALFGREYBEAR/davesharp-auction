@@ -12,7 +12,9 @@ export async function onRequestGet(ctx) {
   const phase = phaseOf(a);
 
   // First poll after the close fires the winner email (race-safe inside).
-  if (phase === 'closed' && !a.finalized) {
+  // Once closed, ensure the winner is emailed on every poll. The function is
+  // idempotent per winner, so this also catches a winner change from a void/ban.
+  if (phase === 'closed') {
     await finalizeIfClosed(env, request, ctx);
   }
 
