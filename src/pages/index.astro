@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+const year = new Date().getFullYear();
 ---
 
 <Layout>
@@ -61,10 +62,11 @@ import Layout from '../layouts/Layout.astro';
             </div>
             <label class="commit">
               <input type="checkbox" id="r-commit" required />
-              <span>I understand each bid I place is a binding commitment to buy if I win, payable by invoice.</span>
+              <span>I understand that each bid is a binding commitment to buy if I win, that I must pay the invoice within 24 hours or the painting passes to the next-highest bidder, and that delivery or collection is arranged separately at my cost.</span>
             </label>
             <button type="submit" class="btn" id="registerBtn">Send my code</button>
           </form>
+          <p class="reg-note">By registering you agree to our <a href="/terms">terms &amp; conditions</a>. Your details are handled in line with our <a href="/privacy">privacy policy</a>.</p>
         </div>
 
         <!-- Register: step 2 — verify code -->
@@ -115,6 +117,14 @@ import Layout from '../layouts/Layout.astro';
       <div class="rules" id="rules"></div>
     </section>
   </main>
+
+  <footer class="foot">
+    <span class="foot-links">
+      <a href="/terms">Terms &amp; conditions</a>
+      <a href="/privacy">Privacy policy</a>
+    </span>
+    <span>&copy; {year} Dave Sharp &middot; <a href="mailto:auction@davesharp.art">auction@davesharp.art</a></span>
+  </footer>
 
   <script is:inline>
     (function () {
@@ -226,7 +236,10 @@ import Layout from '../layouts/Layout.astro';
         $('rules').innerHTML =
           'Minimum increment ' + money(state.minIncrement) + '  \u00B7  ' +
           'a bid in the final 10 minutes extends the close by 10 minutes<br/>' +
-          'You verify your email once  \u00B7  the winning bid is invoiced directly  \u00B7  bids are binding';
+          'You verify your email once  \u00B7  every bid is a binding commitment to buy if you win<br/>' +
+          'The winner is invoiced directly and must pay within 24 hours of the invoice, ' +
+          'or the painting passes to the next-highest bidder<br/>' +
+          'The winning bid excludes delivery \u2014 shipping or collection is arranged with the buyer, at the buyer\u2019s cost';
 
         // Decide which block shows.
         var showReg = false, showVerify = false, showBid = false, showState = false;

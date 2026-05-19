@@ -213,13 +213,13 @@ export function outbidEmailContent(currentBid, url) {
 export function winEmailContent(amount, title, url) {
   return {
     subject: `You won — Dave Sharp auction`,
-    text: `Congratulations — your winning bid of ${gbp(amount)} took "${title}". You'll receive an invoice by email shortly to complete the purchase.`,
+    text: `Congratulations — your winning bid of ${gbp(amount)} took "${title}". You'll receive an invoice by email shortly. Payment is due within 24 hours of that invoice, or the painting passes to the next-highest bidder.`,
     html: shell(
       eyebrow('Auction won', '#f4a82a') +
       headline("Congratulations — it's yours") +
       para(`The winning bid on <strong style="color:#ede5d4;font-weight:700;">${title}</strong> is:`) +
       bigAmount(gbp(amount)) +
-      para("You'll receive an invoice by email shortly to complete the purchase.") +
+      para("You'll receive an invoice by email shortly. <strong style=\"color:#ede5d4;font-weight:700;\">Payment is due within 24 hours of that invoice</strong> — otherwise the painting passes to the next-highest bidder.") +
       note('Any questions? Just reply to this email.')
     ),
   };
