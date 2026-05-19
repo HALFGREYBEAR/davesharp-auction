@@ -1,5 +1,7 @@
--- Dave Sharp Auction — database schema
--- All money values are stored as whole pounds (integers). No pence, no floats.
+-- Dave Sharp Auction — database schema (Stage 2)
+-- Money is stored as whole pounds (integers). No pence, no floats.
+-- For a brand-new database, run this file. For an existing Stage 1 database,
+-- run migration-stage2.sql instead.
 
 -- Single active auction lives in row id = 1.
 CREATE TABLE IF NOT EXISTS auction (
@@ -13,23 +15,30 @@ CREATE TABLE IF NOT EXISTS auction (
   starting_bid      INTEGER NOT NULL,
   min_increment     INTEGER NOT NULL,
   max_bid           INTEGER NOT NULL,
-  opens_at          TEXT NOT NULL,          -- ISO 8601 datetime
-  closes_at         TEXT NOT NULL,          -- ISO 8601; extended by anti-snipe
+  opens_at          TEXT NOT NULL,                  -- ISO 8601 datetime
+  closes_at         TEXT NOT NULL,                  -- ISO 8601; extended by anti-snipe
+  status            TEXT NOT NULL DEFAULT 'draft',  -- 'draft' = hidden, 'live' = public
   current_bid       INTEGER NOT NULL DEFAULT 0,
   current_bidder_id INTEGER,
   bid_count         INTEGER NOT NULL DEFAULT 0,
+  finalized         INTEGER NOT NULL DEFAULT 0,     -- 1 once the winner email has gone out
   updated_at        TEXT
 );
 
--- One row per bidder, keyed by email. `verified` is enforced in Stage 2.
+-- One row per bidder, keyed by email. Verification happens once per bidder.
 CREATE TABLE IF NOT EXISTS bidders (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  name         TEXT NOT NULL,
-  email        TEXT NOT NULL UNIQUE,
-  phone        TEXT,
-  verified     INTEGER NOT NULL DEFAULT 0,
-  verify_token TEXT,
-  created_at   TEXT
+  id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+  name                 TEXT NOT NULL,
+  email                TEXT NOT NULL UNIQUE,
+  phone                TEXT,
+  verified             INTEGER NOT NULL DEFAULT 0,
+  verify_code          TEXT,
+  verify_code_expires  TEXT,
+  verify_attempts      INTEGER NOT NULL DEFAULT 0,
+  session_token        TEXT,
+  verified_at          TEXT,
+  last_outbid_email_at TEXT,
+  created_at           TEXT
 );
 
 -- Append-only log of every accepted bid.
@@ -44,3 +53,4 @@ CREATE TABLE IF NOT EXISTS bids (
 
 CREATE INDEX IF NOT EXISTS idx_bids_amount ON bids(amount);
 CREATE INDEX IF NOT EXISTS idx_bidders_email ON bidders(email);
+CREATE INDEX IF NOT EXISTS idx_bidders_session ON bidders(session_token);

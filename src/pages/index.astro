@@ -20,7 +20,7 @@ import Layout from '../layouts/Layout.astro';
       <div class="placeholder" id="paintingPlaceholder">Painting image</div>
     </section>
 
-    <!-- Bid panel -->
+    <!-- Panel -->
     <section class="panel">
       <div class="eyebrow" id="phaseEyebrow">Auction</div>
       <h1 class="painting-title" id="paintingTitle">&nbsp;</h1>
@@ -28,7 +28,7 @@ import Layout from '../layouts/Layout.astro';
       <p class="painting-story" id="paintingStory"></p>
 
       <div class="bidbox">
-        <div class="bidbox-row">
+        <div class="bidbox-row" id="bidRow">
           <div>
             <div class="bid-label" id="bidLabel">Current bid</div>
             <div class="bid-amount" id="bidAmount">—</div>
@@ -40,42 +40,74 @@ import Layout from '../layouts/Layout.astro';
           </div>
         </div>
 
-        <!-- LIVE: bid form -->
-        <div id="bidForm" style="display:none">
+        <!-- Register: step 1 — details -->
+        <div id="registerBlock" style="display:none">
           <div class="divider"></div>
-          <form id="form">
+          <div class="block-intro" id="registerIntro">Register to bid</div>
+          <form id="registerForm">
             <div class="field-row">
               <div class="field">
-                <label for="f-name">Your name</label>
-                <input type="text" id="f-name" required />
+                <label for="r-name">Your name</label>
+                <input type="text" id="r-name" required />
               </div>
               <div class="field">
-                <label for="f-phone">Phone</label>
-                <input type="tel" id="f-phone" />
+                <label for="r-phone">Phone (optional)</label>
+                <input type="tel" id="r-phone" />
               </div>
             </div>
             <div class="field">
-              <label for="f-email">Email</label>
-              <input type="email" id="f-email" required />
+              <label for="r-email">Email</label>
+              <input type="email" id="r-email" required />
             </div>
+            <label class="commit">
+              <input type="checkbox" id="r-commit" required />
+              <span>I understand each bid I place is a binding commitment to buy if I win, payable by invoice.</span>
+            </label>
+            <button type="submit" class="btn" id="registerBtn">Send my code</button>
+          </form>
+        </div>
+
+        <!-- Register: step 2 — verify code -->
+        <div id="verifyBlock" style="display:none">
+          <div class="divider"></div>
+          <div class="block-intro">Enter your code</div>
+          <p class="verify-note">
+            We've emailed a 6-digit code to <b id="verifyEmail"></b>. Enter it to confirm.
+          </p>
+          <form id="verifyForm">
+            <div class="field amount">
+              <label for="v-code">6-digit code</label>
+              <input type="text" id="v-code" inputmode="numeric" autocomplete="one-time-code"
+                     maxlength="6" required />
+            </div>
+            <button type="submit" class="btn" id="verifyBtn">Verify &amp; continue</button>
+          </form>
+          <div class="verify-links">
+            <a href="#" id="resendLink">Resend code</a>
+            <a href="#" id="changeEmailLink">Use a different email</a>
+          </div>
+        </div>
+
+        <!-- Bid form (verified + live) -->
+        <div id="bidForm" style="display:none">
+          <div class="divider"></div>
+          <div class="bidder-tag" id="bidderTag"></div>
+          <form id="form">
             <div class="field amount">
               <label for="f-amount" id="amountLabel">Your bid (£)</label>
               <input type="number" id="f-amount" required />
             </div>
-            <label class="commit">
-              <input type="checkbox" id="f-commit" required />
-              <span>I understand a winning bid is a commitment to buy, payable by invoice.</span>
-            </label>
             <button type="submit" class="btn" id="bidBtn">Place bid</button>
           </form>
-          <div class="msg" id="msg"></div>
         </div>
 
-        <!-- SCHEDULED / CLOSED: state note -->
+        <!-- State note (scheduled+verified / closed / draft) -->
         <div id="stateBlock" style="display:none">
           <div class="divider"></div>
           <p class="state-note" id="stateNote"></p>
         </div>
+
+        <div class="msg" id="msg"></div>
       </div>
 
       <div class="rules" id="rules"></div>
@@ -85,30 +117,66 @@ import Layout from '../layouts/Layout.astro';
   <script is:inline>
     (function () {
       var POLL_MS = 5000;
-      var serverOffset = 0;       // server clock minus local clock
+      var serverOffset = 0;
       var state = null;
-      var cdTimer = null;
+      var me = { verified: false, firstName: '' };
+      var regStep = 'details';        // 'details' | 'code'
+      var pendingEmail = '';
+      var bidArmed = false;
+      var armTimer = null;
 
       var $ = function (id) { return document.getElementById(id); };
       var money = function (n) { return '\u00A3' + Number(n || 0).toLocaleString('en-GB'); };
-
       function serverNow() { return Date.now() + serverOffset; }
-
       function nextMinBid() {
         if (!state) return 0;
         return Math.max(state.startingBid, (state.currentBid || 0) + state.minIncrement);
       }
+      function show(id, on) { $(id).style.display = on ? 'block' : 'none'; }
 
+      function showMsg(text, kind) {
+        var m = $('msg');
+        m.textContent = text;
+        m.className = 'msg show ' + kind;
+      }
+      function clearMsg() { $('msg').className = 'msg'; }
+
+      function disarm() {
+        bidArmed = false;
+        if (armTimer) { clearTimeout(armTimer); armTimer = null; }
+        var b = $('bidBtn');
+        if (b) { b.classList.remove('armed'); b.textContent = 'Place bid'; }
+      }
+
+      // ---- rendering ----------------------------------------------------
       function render() {
         if (!state) return;
-        var p = state.painting || {};
+        var phase = state.phase;
 
+        // Draft: nothing to show publicly.
+        if (phase === 'draft') {
+          $('liveFlag').className = 'bar-live';
+          $('liveLabel').textContent = 'Coming soon';
+          $('phaseEyebrow').textContent = 'Coming soon';
+          $('paintingTitle').textContent = 'Auction coming soon';
+          $('paintingMeta').textContent = '';
+          $('paintingStory').textContent = '';
+          show('bidRow', false);
+          ['registerBlock', 'verifyBlock', 'bidForm'].forEach(function (i) { show(i, false); });
+          show('stateBlock', true);
+          $('stateNote').textContent = 'This auction has not been published yet. Please check back soon.';
+          $('rules').innerHTML = '';
+          return;
+        }
+
+        var p = state.painting || {};
         $('paintingTitle').textContent = p.title || 'Original Painting';
-        $('paintingMeta').textContent = [p.size, p.medium].filter(Boolean).join('  ·  ');
+        $('paintingMeta').textContent = [p.size, p.medium].filter(Boolean).join('  \u00B7  ');
         $('paintingStory').textContent = p.story || '';
 
         var img = $('paintingImg');
-        if (p.image) {
+        if (p.image && img.dataset.src !== p.image) {
+          img.dataset.src = p.image;
           img.onerror = function () {
             img.style.display = 'none';
             $('paintingPlaceholder').style.display = 'block';
@@ -122,78 +190,92 @@ import Layout from '../layouts/Layout.astro';
         }
 
         var flag = $('liveFlag');
-        if (state.phase === 'live') {
+        if (phase === 'live') {
           flag.className = 'bar-live is-live';
           $('liveLabel').textContent = 'Auction live';
-        } else if (state.phase === 'closed') {
+        } else if (phase === 'closed') {
           flag.className = 'bar-live';
           $('liveLabel').textContent = 'Auction ended';
         } else {
           flag.className = 'bar-live';
-          $('liveLabel').textContent = 'Opening soon';
+          $('liveLabel').textContent = 'Registration open';
         }
 
         var hasBids = (state.currentBid || 0) > 0;
+        show('bidRow', true);
         $('bidAmount').textContent = hasBids ? money(state.currentBid) : money(state.startingBid);
         $('bidLabel').textContent = hasBids ? 'Current bid' : 'Starting bid';
-
         var sub = '';
         if (hasBids) {
           sub = state.bidCount + ' bid' + (state.bidCount === 1 ? '' : 's');
-          if (state.leader) sub += '  ·  high bidder ' + state.leader;
+          if (state.leader) sub += '  \u00B7  high bidder ' + state.leader;
         } else {
-          sub = 'No bids yet — be the first';
+          sub = phase === 'live' ? 'No bids yet — be the first' : 'No bids yet';
         }
-        $('bidSub').innerHTML = sub;
+        $('bidSub').textContent = sub;
 
         $('rules').innerHTML =
-          'Minimum increment ' + money(state.minIncrement) + '  ·  ' +
+          'Minimum increment ' + money(state.minIncrement) + '  \u00B7  ' +
           'a bid in the final 10 minutes extends the close by 10 minutes<br/>' +
-          'Winning bidder is invoiced directly  ·  bids are binding';
+          'You verify your email once  \u00B7  the winning bid is invoiced directly  \u00B7  bids are binding';
 
-        // phase-specific blocks
-        var bidForm = $('bidForm'), stateBlock = $('stateBlock');
-        if (state.phase === 'live') {
-          bidForm.style.display = 'block';
-          stateBlock.style.display = 'none';
-          $('phaseEyebrow').textContent = 'Bidding open';
-          $('cdLabel').textContent = 'Closes in';
-          var amt = $('f-amount');
-          if (document.activeElement !== amt) {
-            amt.value = nextMinBid();
-            amt.min = nextMinBid();
-          }
-          $('amountLabel').textContent = 'Your bid (£) — minimum ' + money(nextMinBid());
-        } else if (state.phase === 'closed') {
-          bidForm.style.display = 'none';
-          stateBlock.style.display = 'block';
+        // Decide which block shows.
+        var showReg = false, showVerify = false, showBid = false, showState = false;
+
+        if (phase === 'closed') {
+          showState = true;
           $('phaseEyebrow').textContent = 'Auction closed';
           $('cdLabel').textContent = 'Status';
           $('countdown').textContent = 'Ended';
           $('stateNote').textContent = hasBids
             ? 'Auction ended. Winning bid ' + money(state.currentBid) +
-              (state.leader ? ' by ' + state.leader : '') + '. The winner will be contacted by email.'
+              (state.leader ? ' by ' + state.leader : '') + '. The winner has been emailed.'
             : 'This auction has ended with no bids.';
-        } else {
-          bidForm.style.display = 'none';
-          stateBlock.style.display = 'block';
-          $('phaseEyebrow').textContent = 'Opening soon';
+        } else if (phase === 'scheduled') {
+          $('phaseEyebrow').textContent = 'Registration open';
           $('cdLabel').textContent = 'Opens in';
-          $('stateNote').textContent = 'Bidding has not opened yet. The countdown above shows time until it goes live.';
+          if (me.verified) {
+            showState = true;
+            $('stateNote').textContent = "You're registered to bid. Bidding opens when the countdown reaches zero — your bids will be instant.";
+          } else {
+            showReg = (regStep === 'details');
+            showVerify = (regStep === 'code');
+            $('registerIntro').textContent = 'Register now — bidding opens soon';
+          }
+        } else { // live
+          $('phaseEyebrow').textContent = 'Bidding open';
+          $('cdLabel').textContent = 'Closes in';
+          if (me.verified) {
+            showBid = true;
+            $('bidderTag').textContent = 'Bidding as ' + (me.firstName || 'you');
+            var amt = $('f-amount');
+            if (document.activeElement !== amt) {
+              amt.value = nextMinBid();
+              amt.min = nextMinBid();
+              disarm();
+            }
+            $('amountLabel').textContent = 'Your bid (£) — minimum ' + money(nextMinBid());
+          } else {
+            showReg = (regStep === 'details');
+            showVerify = (regStep === 'code');
+            $('registerIntro').textContent = 'Verify your email to bid';
+          }
         }
+
+        show('registerBlock', showReg);
+        show('verifyBlock', showVerify);
+        show('bidForm', showBid);
+        show('stateBlock', showState);
       }
 
       function updateCountdown() {
-        if (!state) return;
-        var target = state.phase === 'scheduled'
-          ? Date.parse(state.opensAt)
-          : Date.parse(state.closesAt);
-        var diff = target - serverNow();
+        if (!state || state.phase === 'draft') return;
         var el = $('countdown');
-
         if (state.phase === 'closed') { el.textContent = 'Ended'; return; }
+        var target = state.phase === 'scheduled'
+          ? Date.parse(state.opensAt) : Date.parse(state.closesAt);
+        var diff = target - serverNow();
         if (diff <= 0) { el.textContent = '00:00:00'; loadState(); return; }
-
         var s = Math.floor(diff / 1000);
         var d = Math.floor(s / 86400); s -= d * 86400;
         var h = Math.floor(s / 3600); s -= h * 3600;
@@ -203,6 +285,7 @@ import Layout from '../layouts/Layout.astro';
         el.className = (state.phase === 'live' && diff < 10 * 60 * 1000) ? 'countdown urgent' : 'countdown';
       }
 
+      // ---- data ---------------------------------------------------------
       async function loadState() {
         try {
           var res = await fetch('/api/state', { cache: 'no-store' });
@@ -216,49 +299,166 @@ import Layout from '../layouts/Layout.astro';
           $('liveLabel').textContent = 'Connection issue';
         }
       }
-
-      function showMsg(text, kind) {
-        var m = $('msg');
-        m.textContent = text;
-        m.className = 'msg show ' + kind;
+      async function loadMe() {
+        try {
+          var res = await fetch('/api/me', { cache: 'no-store' });
+          if (res.ok) {
+            var m = await res.json();
+            me = { verified: !!m.verified, firstName: m.firstName || '' };
+          }
+        } catch (e) { /* treat as not verified */ }
       }
 
-      async function submitBid(e) {
+      // ---- register / verify -------------------------------------------
+      async function submitRegister(e) {
         e.preventDefault();
-        var btn = $('bidBtn');
+        clearMsg();
+        var btn = $('registerBtn');
         var payload = {
-          name: $('f-name').value.trim(),
-          email: $('f-email').value.trim(),
-          phone: $('f-phone').value.trim(),
-          amount: Number($('f-amount').value),
-          committed: $('f-commit').checked,
+          name: $('r-name').value.trim(),
+          email: $('r-email').value.trim(),
+          phone: $('r-phone').value.trim(),
         };
-        btn.disabled = true;
-        btn.textContent = 'Placing bid…';
+        if (!$('r-commit').checked) { showMsg('Please tick the box to confirm bids are binding.', 'err'); return; }
+        btn.disabled = true; btn.textContent = 'Sending…';
         try {
-          var res = await fetch('/api/bid', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
+          var res = await fetch('/api/register', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
             body: JSON.stringify(payload),
           });
           var data = await res.json();
           if (data.ok) {
+            pendingEmail = payload.email;
+            $('verifyEmail').textContent = pendingEmail;
+            regStep = 'code';
+            render();
+            $('v-code').focus();
+          } else if (data.error === 'email_invalid') {
+            showMsg('Please enter a valid email address.', 'err');
+          } else if (data.error === 'name_required') {
+            showMsg('Please enter your name.', 'err');
+          } else if (data.error === 'email_failed') {
+            showMsg('We could not send the code. Please check the address and try again.', 'err');
+          } else if (data.error === 'not_open' || data.error === 'closed') {
+            showMsg('Registration is not open for this auction.', 'err');
+          } else {
+            showMsg('Something went wrong. Please try again.', 'err');
+          }
+        } catch (err) {
+          showMsg('Network error — please try again.', 'err');
+        } finally {
+          btn.disabled = false; btn.textContent = 'Send my code';
+        }
+      }
+
+      async function submitVerify(e) {
+        e.preventDefault();
+        clearMsg();
+        var btn = $('verifyBtn');
+        var code = $('v-code').value.trim();
+        btn.disabled = true; btn.textContent = 'Verifying…';
+        try {
+          var res = await fetch('/api/verify', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ email: pendingEmail, code: code }),
+          });
+          var data = await res.json();
+          if (data.ok) {
+            me = { verified: true, firstName: data.firstName || '' };
+            regStep = 'details';
+            $('v-code').value = '';
+            showMsg('Email verified — you can bid.', 'ok');
+            render();
+          } else if (data.error === 'code_wrong') {
+            showMsg('That code is not correct. Check the email and try again.', 'err');
+          } else if (data.error === 'code_expired') {
+            showMsg('That code has expired. Tap "Resend code" for a new one.', 'err');
+          } else if (data.error === 'too_many_attempts') {
+            showMsg('Too many attempts. Tap "Resend code" to start again.', 'err');
+          } else if (data.error === 'no_code') {
+            showMsg('No code on file — please request one again.', 'err');
+          } else {
+            showMsg('Something went wrong. Please try again.', 'err');
+          }
+        } catch (err) {
+          showMsg('Network error — please try again.', 'err');
+        } finally {
+          btn.disabled = false; btn.textContent = 'Verify & continue';
+        }
+      }
+
+      async function resendCode(e) {
+        e.preventDefault();
+        if (!pendingEmail) return;
+        clearMsg();
+        try {
+          var res = await fetch('/api/register', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              name: $('r-name').value.trim() || 'Bidder',
+              email: pendingEmail,
+              phone: $('r-phone').value.trim(),
+            }),
+          });
+          var data = await res.json();
+          if (data.ok) showMsg('A new code is on its way.', 'ok');
+          else showMsg('Could not resend the code. Please try again.', 'err');
+        } catch (err) {
+          showMsg('Network error — please try again.', 'err');
+        }
+      }
+
+      function changeEmail(e) {
+        e.preventDefault();
+        clearMsg();
+        regStep = 'details';
+        pendingEmail = '';
+        render();
+      }
+
+      // ---- bidding ------------------------------------------------------
+      async function submitBid(e) {
+        e.preventDefault();
+        var amount = Number($('f-amount').value);
+        if (!Number.isFinite(amount) || amount <= 0) {
+          showMsg('Enter a valid bid amount.', 'err');
+          return;
+        }
+        // Two-tap confirm to prevent accidental binding bids.
+        if (!bidArmed) {
+          bidArmed = true;
+          var b = $('bidBtn');
+          b.classList.add('armed');
+          b.textContent = 'Tap again to confirm ' + money(amount);
+          if (armTimer) clearTimeout(armTimer);
+          armTimer = setTimeout(disarm, 4000);
+          return;
+        }
+        disarm();
+        clearMsg();
+        var btn = $('bidBtn');
+        btn.disabled = true; btn.textContent = 'Placing bid…';
+        try {
+          var res = await fetch('/api/bid', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ amount: amount }),
+          });
+          var data = await res.json();
+          if (data.ok) {
             showMsg('You are the high bidder at ' + money(data.currentBid) + '.', 'ok');
-            $('f-commit').checked = false;
+          } else if (data.error === 'not_verified') {
+            me = { verified: false, firstName: '' };
+            regStep = 'details';
+            showMsg('Your session expired — please register again.', 'err');
           } else if (data.error === 'outbid' || data.error === 'too_low') {
             showMsg('Bid not high enough — the current bid is now ' +
-              money(data.currentBid || (data.minBid - state.minIncrement)) +
-              '. Try again above.', 'err');
+              money(data.currentBid || (data.minBid - state.minIncrement)) + '. Try again above.', 'err');
           } else if (data.error === 'over_cap') {
             showMsg('That exceeds the maximum bid of ' + money(data.maxBid) + '.', 'err');
           } else if (data.error === 'closed') {
             showMsg('The auction has closed.', 'err');
           } else if (data.error === 'not_open') {
-            showMsg('Bidding has not opened yet.', 'err');
-          } else if (data.error === 'email_invalid') {
-            showMsg('Please enter a valid email address.', 'err');
-          } else if (data.error === 'not_committed') {
-            showMsg('Please tick the box to confirm your bid is binding.', 'err');
+            showMsg('Bidding is not open.', 'err');
           } else {
             showMsg('Sorry — your bid could not be placed. Please try again.', 'err');
           }
@@ -266,15 +466,25 @@ import Layout from '../layouts/Layout.astro';
           showMsg('Network error — please try again.', 'err');
         } finally {
           btn.disabled = false;
-          btn.textContent = 'Place bid';
+          if (!bidArmed) btn.textContent = 'Place bid';
           loadState();
         }
       }
 
-      document.getElementById('form').addEventListener('submit', submitBid);
-      loadState();
-      setInterval(loadState, POLL_MS);
-      cdTimer = setInterval(updateCountdown, 1000);
+      // ---- wire up ------------------------------------------------------
+      $('registerForm').addEventListener('submit', submitRegister);
+      $('verifyForm').addEventListener('submit', submitVerify);
+      $('resendLink').addEventListener('click', resendCode);
+      $('changeEmailLink').addEventListener('click', changeEmail);
+      $('form').addEventListener('submit', submitBid);
+      $('f-amount').addEventListener('input', disarm);
+
+      (async function init() {
+        await loadMe();
+        await loadState();
+        setInterval(loadState, POLL_MS);
+        setInterval(updateCountdown, 1000);
+      })();
     })();
   </script>
 </Layout>

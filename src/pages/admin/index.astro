@@ -1,0 +1,361 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="Auction Admin — Dave Sharp">
+  <header class="bar">
+    <div class="bar-mark">
+      Dave Sharp
+      <span>Auction Admin</span>
+    </div>
+    <div class="bar-live" id="adminFlag">
+      <span class="dot"></span><span id="adminPhaseLabel">Loading</span>
+    </div>
+  </header>
+
+  <main class="admin">
+    <div class="msg" id="msg"></div>
+
+    <!-- Status -->
+    <section class="admin-card">
+      <div class="admin-stats">
+        <div class="admin-stat">
+          <div class="admin-stat-label">Phase</div>
+          <div class="admin-stat-val" id="sPhase">—</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">Current bid</div>
+          <div class="admin-stat-val accent" id="sBid">—</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">Bids</div>
+          <div class="admin-stat-val" id="sCount">—</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">High bidder</div>
+          <div class="admin-stat-val" id="sLeader">—</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">Closes</div>
+          <div class="admin-stat-val small" id="sCloses">—</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Configuration -->
+    <section class="admin-card">
+      <h2 class="admin-h">Auction configuration</h2>
+      <form id="configForm">
+        <div class="field">
+          <label for="c-title">Painting title</label>
+          <input type="text" id="c-title" required />
+        </div>
+        <div class="admin-grid">
+          <div class="field">
+            <label for="c-size">Size</label>
+            <input type="text" id="c-size" placeholder="100 x 80 cm" />
+          </div>
+          <div class="field">
+            <label for="c-medium">Medium</label>
+            <input type="text" id="c-medium" placeholder="Acrylic on canvas" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="c-story">Story / description</label>
+          <textarea id="c-story" rows="3"></textarea>
+        </div>
+        <div class="field">
+          <label for="c-image">Image path or URL</label>
+          <input type="text" id="c-image" placeholder="/painting.jpg" />
+        </div>
+        <div class="admin-grid three">
+          <div class="field">
+            <label for="c-start">Starting bid (£)</label>
+            <input type="number" id="c-start" min="1" required />
+          </div>
+          <div class="field">
+            <label for="c-inc">Min increment (£)</label>
+            <input type="number" id="c-inc" min="1" required />
+          </div>
+          <div class="field">
+            <label for="c-max">Maximum bid (£)</label>
+            <input type="number" id="c-max" min="1" required />
+          </div>
+        </div>
+        <div class="admin-grid">
+          <div class="field">
+            <label for="c-opens">Opens at</label>
+            <input type="datetime-local" id="c-opens" required />
+          </div>
+          <div class="field">
+            <label for="c-closes">Closes at</label>
+            <input type="datetime-local" id="c-closes" required />
+          </div>
+        </div>
+        <div class="field">
+          <label for="c-status">Visibility</label>
+          <select id="c-status">
+            <option value="draft">Draft — hidden from the public</option>
+            <option value="live">Live — visible, registration open</option>
+          </select>
+        </div>
+        <button type="submit" class="btn" id="saveBtn">Save configuration</button>
+      </form>
+    </section>
+
+    <!-- Live controls -->
+    <section class="admin-card">
+      <h2 class="admin-h">Live controls</h2>
+      <div class="admin-controls">
+        <div class="admin-control">
+          <div class="admin-control-text">
+            <strong>Extend the close</strong>
+            <span>Push the closing time out. Use negative minutes to pull it in.</span>
+          </div>
+          <div class="admin-control-action">
+            <input type="number" id="extendMins" value="10" class="admin-mins" />
+            <span class="admin-mins-label">min</span>
+            <button class="btn btn-ghost" id="extendBtn">Extend</button>
+          </div>
+        </div>
+        <div class="admin-control">
+          <div class="admin-control-text">
+            <strong>Close the auction now</strong>
+            <span>Ends bidding immediately and emails the winning bidder.</span>
+          </div>
+          <div class="admin-control-action">
+            <button class="btn btn-danger" id="closeBtn">Close now</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bid history -->
+    <section class="admin-card">
+      <h2 class="admin-h">Bid history</h2>
+      <div class="admin-table-wrap">
+        <table class="admin-table" id="bidsTable">
+          <thead>
+            <tr><th>#</th><th>Time</th><th>Amount</th><th>Bidder</th><th>Email</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="bidsBody"><tr><td colspan="7" class="admin-empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <p class="admin-hint">Voiding a bid rolls the auction back to the next-highest remaining bidder.</p>
+    </section>
+
+    <!-- Bidders -->
+    <section class="admin-card">
+      <h2 class="admin-h">Registered bidders</h2>
+      <div class="admin-table-wrap">
+        <table class="admin-table" id="biddersTable">
+          <thead>
+            <tr><th>Name</th><th>Email</th><th>Phone</th><th>Verified</th><th>Registered</th></tr>
+          </thead>
+          <tbody id="biddersBody"><tr><td colspan="5" class="admin-empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script is:inline>
+    (function () {
+      var POLL_MS = 8000;
+      var configLoaded = false;
+
+      var $ = function (id) { return document.getElementById(id); };
+      var money = function (n) { return '\u00A3' + Number(n || 0).toLocaleString('en-GB'); };
+      var esc = function (s) {
+        return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+        });
+      };
+
+      function showMsg(text, kind) {
+        var m = $('msg');
+        m.textContent = text;
+        m.className = 'msg show ' + kind;
+        if (kind === 'ok') setTimeout(function () { m.className = 'msg'; }, 4000);
+      }
+
+      function fmtDateTime(iso) {
+        var d = new Date(iso);
+        if (isNaN(d)) return '—';
+        return d.toLocaleString('en-GB', {
+          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        });
+      }
+      function toLocalInput(iso) {
+        var d = new Date(iso);
+        if (isNaN(d)) return '';
+        var p = function (n) { return String(n).padStart(2, '0'); };
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+          'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+      }
+
+      function renderStatus(d) {
+        var a = d.auction || {};
+        var flag = $('adminFlag');
+        flag.className = 'bar-live' + (d.phase === 'live' ? ' is-live' : '');
+        $('adminPhaseLabel').textContent = 'Auction ' + d.phase;
+        $('sPhase').textContent = d.phase;
+        $('sBid').textContent = a.current_bid ? money(a.current_bid) : money(a.starting_bid || 0);
+        $('sCount').textContent = a.bid_count || 0;
+        $('sCloses').textContent = fmtDateTime(a.closes_at);
+        $('sLeader').textContent = '—';
+        if (a.current_bidder_id) {
+          var lead = (d.bidders || []).find(function (b) { return b.id === a.current_bidder_id; });
+          if (lead) $('sLeader').textContent = lead.name;
+        }
+      }
+
+      function fillConfig(a) {
+        if (!a) return;
+        $('c-title').value = a.painting_title || '';
+        $('c-size').value = a.size || '';
+        $('c-medium').value = a.medium || '';
+        $('c-story').value = a.story || '';
+        $('c-image').value = a.image_path || '';
+        $('c-start').value = a.starting_bid || '';
+        $('c-inc').value = a.min_increment || '';
+        $('c-max').value = a.max_bid || '';
+        $('c-opens').value = toLocalInput(a.opens_at);
+        $('c-closes').value = toLocalInput(a.closes_at);
+        $('c-status').value = a.status === 'live' ? 'live' : 'draft';
+      }
+
+      function renderBids(bids) {
+        var body = $('bidsBody');
+        if (!bids || !bids.length) {
+          body.innerHTML = '<tr><td colspan="7" class="admin-empty">No bids yet.</td></tr>';
+          return;
+        }
+        body.innerHTML = bids.map(function (b) {
+          var voided = b.voided ? ' class="voided"' : '';
+          var status = b.voided
+            ? '<span class="pill pill-void">Voided</span>'
+            : '<span class="pill pill-ok">Active</span>';
+          var action = b.voided
+            ? ''
+            : '<button class="link-btn" data-void="' + b.id + '">Void</button>';
+          return '<tr' + voided + '>' +
+            '<td>' + b.id + '</td>' +
+            '<td>' + fmtDateTime(b.created_at) + '</td>' +
+            '<td class="num">' + money(b.amount) + '</td>' +
+            '<td>' + esc(b.name) + '</td>' +
+            '<td class="muted">' + esc(b.email) + '</td>' +
+            '<td>' + status + '</td>' +
+            '<td>' + action + '</td></tr>';
+        }).join('');
+        Array.prototype.forEach.call(body.querySelectorAll('[data-void]'), function (btn) {
+          btn.addEventListener('click', function () { voidBid(btn.getAttribute('data-void')); });
+        });
+      }
+
+      function renderBidders(bidders) {
+        var body = $('biddersBody');
+        if (!bidders || !bidders.length) {
+          body.innerHTML = '<tr><td colspan="5" class="admin-empty">No bidders yet.</td></tr>';
+          return;
+        }
+        body.innerHTML = bidders.map(function (b) {
+          var v = b.verified
+            ? '<span class="pill pill-ok">Verified</span>'
+            : '<span class="pill pill-wait">Pending</span>';
+          return '<tr>' +
+            '<td>' + esc(b.name) + '</td>' +
+            '<td class="muted">' + esc(b.email) + '</td>' +
+            '<td class="muted">' + esc(b.phone || '—') + '</td>' +
+            '<td>' + v + '</td>' +
+            '<td class="muted">' + fmtDateTime(b.created_at) + '</td></tr>';
+        }).join('');
+      }
+
+      async function load() {
+        try {
+          var res = await fetch('/api/admin/data', { cache: 'no-store' });
+          if (res.status === 403) {
+            showMsg('Access denied. This panel must be opened through Cloudflare Access.', 'err');
+            return;
+          }
+          if (!res.ok) throw new Error('data ' + res.status);
+          var d = await res.json();
+          renderStatus(d);
+          renderBids(d.bids);
+          renderBidders(d.bidders);
+          if (!configLoaded) { fillConfig(d.auction); configLoaded = true; }
+        } catch (e) {
+          showMsg('Could not load auction data.', 'err');
+        }
+      }
+
+      async function post(url, payload) {
+        var res = await fetch(url, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload || {}),
+        });
+        var data = {};
+        try { data = await res.json(); } catch (e) { /* ignore */ }
+        return { ok: res.ok, status: res.status, data: data };
+      }
+
+      async function saveConfig(e) {
+        e.preventDefault();
+        var opens = $('c-opens').value, closes = $('c-closes').value;
+        if (!opens || !closes) { showMsg('Both open and close times are required.', 'err'); return; }
+        var payload = {
+          painting_title: $('c-title').value.trim(),
+          size: $('c-size').value.trim(),
+          medium: $('c-medium').value.trim(),
+          story: $('c-story').value.trim(),
+          image_path: $('c-image').value.trim(),
+          starting_bid: Number($('c-start').value),
+          min_increment: Number($('c-inc').value),
+          max_bid: Number($('c-max').value),
+          opens_at: new Date(opens).toISOString(),
+          closes_at: new Date(closes).toISOString(),
+          status: $('c-status').value,
+        };
+        var btn = $('saveBtn');
+        btn.disabled = true; btn.textContent = 'Saving…';
+        var r = await post('/api/admin/config', payload);
+        btn.disabled = false; btn.textContent = 'Save configuration';
+        if (r.ok && r.data.ok) { showMsg('Configuration saved.', 'ok'); load(); }
+        else if (r.data.error === 'close_before_open') showMsg('Close time must be after the open time.', 'err');
+        else if (r.data.error === 'dates_invalid') showMsg('Please enter valid open and close times.', 'err');
+        else if (r.data.error === 'numbers_invalid') showMsg('Bid amounts must be positive numbers.', 'err');
+        else if (r.data.error === 'title_required') showMsg('A painting title is required.', 'err');
+        else showMsg('Could not save — please try again.', 'err');
+      }
+
+      async function closeNow() {
+        if (!confirm('Close the auction now? This ends bidding immediately and emails the winner.')) return;
+        var r = await post('/api/admin/close', {});
+        if (r.ok && r.data.ok) { showMsg('Auction closed.', 'ok'); load(); }
+        else showMsg('Could not close the auction.', 'err');
+      }
+
+      async function extend() {
+        var mins = Number($('extendMins').value);
+        if (!Number.isFinite(mins) || mins === 0) { showMsg('Enter a non-zero number of minutes.', 'err'); return; }
+        var r = await post('/api/admin/extend', { minutes: mins });
+        if (r.ok && r.data.ok) { showMsg('Close time updated.', 'ok'); load(); }
+        else showMsg('Could not extend the auction.', 'err');
+      }
+
+      async function voidBid(id) {
+        if (!confirm('Void bid #' + id + '? The auction rolls back to the next-highest bidder.')) return;
+        var r = await post('/api/admin/void-bid', { bidId: Number(id) });
+        if (r.ok && r.data.ok) { showMsg('Bid #' + id + ' voided.', 'ok'); load(); }
+        else showMsg('Could not void that bid.', 'err');
+      }
+
+      $('configForm').addEventListener('submit', saveConfig);
+      $('closeBtn').addEventListener('click', closeNow);
+      $('extendBtn').addEventListener('click', extend);
+
+      load();
+      setInterval(load, POLL_MS);
+    })();
+  </script>
+</Layout>

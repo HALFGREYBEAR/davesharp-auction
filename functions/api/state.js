@@ -1,30 +1,27 @@
-// GET /api/state — returns auction config + current live state.
+// GET /api/state — auction config + current live state.
 // The public page calls this on load and polls it every few seconds.
+// It also triggers winner finalisation once the auction has closed.
 
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-  });
-}
+import { json, firstName, phaseOf, finalizeIfClosed } from './_lib.js';
 
-function firstName(name) {
-  return (name || '').trim().split(/\s+/)[0] || 'Someone';
-}
-
-export async function onRequestGet({ env }) {
+export async function onRequestGet(ctx) {
+  const { env, request } = ctx;
   const a = await env.DB.prepare('SELECT * FROM auction WHERE id = 1').first();
   if (!a) return json({ error: 'no_auction' }, 404);
 
-  const now = Date.now();
-  const opens = Date.parse(a.opens_at);
-  const closes = Date.parse(a.closes_at);
+  const phase = phaseOf(a);
 
-  let phase = 'scheduled';
-  if (now >= closes) phase = 'closed';
-  else if (now >= opens) phase = 'live';
+  // First poll after the close fires the winner email (race-safe inside).
+  if (phase === 'closed' && !a.finalized) {
+    await finalizeIfClosed(env, request, ctx);
+  }
 
-  // Only expose the leader's first name — never full identity or email.
+  // Draft auctions are hidden — expose nothing but the phase.
+  if (phase === 'draft') {
+    return json({ phase: 'draft', serverTime: new Date().toISOString() });
+  }
+
+  // Only ever expose the leader's first name — never full identity or email.
   let leader = null;
   if (a.current_bidder_id) {
     const b = await env.DB.prepare('SELECT name FROM bidders WHERE id = ?')
