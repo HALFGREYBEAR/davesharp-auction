@@ -248,11 +248,11 @@ import Layout from '../layouts/Layout.astro';
           if (me.verified) {
             showBid = true;
             $('bidderTag').textContent = 'Bidding as ' + (me.firstName || 'you');
+            // Only pre-fill the amount when it's empty — never overwrite a
+            // value the bidder has typed, and never disarm on a poll.
             var amt = $('f-amount');
-            if (document.activeElement !== amt) {
+            if (!amt.value && document.activeElement !== amt) {
               amt.value = nextMinBid();
-              amt.min = nextMinBid();
-              disarm();
             }
             $('amountLabel').textContent = 'Your bid (£) — minimum ' + money(nextMinBid());
           } else {
@@ -424,14 +424,15 @@ import Layout from '../layouts/Layout.astro';
           showMsg('Enter a valid bid amount.', 'err');
           return;
         }
-        // Two-tap confirm to prevent accidental binding bids.
+        // Two-tap confirm to prevent accidental binding bids. The armed
+        // state holds for 10s — long enough for a calm second tap.
         if (!bidArmed) {
           bidArmed = true;
           var b = $('bidBtn');
           b.classList.add('armed');
           b.textContent = 'Tap again to confirm ' + money(amount);
           if (armTimer) clearTimeout(armTimer);
-          armTimer = setTimeout(disarm, 4000);
+          armTimer = setTimeout(disarm, 10000);
           return;
         }
         disarm();
@@ -446,6 +447,8 @@ import Layout from '../layouts/Layout.astro';
           var data = await res.json();
           if (data.ok) {
             showMsg('You are the high bidder at ' + money(data.currentBid) + '.', 'ok');
+            // Clear so the next poll re-fills with the new minimum.
+            $('f-amount').value = '';
           } else if (data.error === 'not_verified') {
             me = { verified: false, firstName: '' };
             regStep = 'details';
