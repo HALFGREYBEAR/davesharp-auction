@@ -2,7 +2,7 @@
 // The public page calls this on load and polls it every few seconds.
 // It also triggers winner finalisation once the auction has closed.
 
-import { json, firstName, phaseOf, finalizeIfClosed } from './_lib.js';
+import { json, firstName, phaseOf, finalizeIfClosed, getSessionBidder } from './_lib.js';
 
 export async function onRequestGet(ctx) {
   const { env, request } = ctx;
@@ -22,11 +22,16 @@ export async function onRequestGet(ctx) {
   }
 
   // Only ever expose the leader's first name — never full identity or email.
+  // youLead tells the polling bidder (and only them) whether they currently
+  // hold the high bid — kept live so a voided/outbid leader sees it drop.
   let leader = null;
+  let youLead = false;
   if (a.current_bidder_id) {
     const b = await env.DB.prepare('SELECT name FROM bidders WHERE id = ?')
       .bind(a.current_bidder_id).first();
     if (b) leader = firstName(b.name);
+    const viewer = await getSessionBidder(env, request);
+    if (viewer && viewer.id === a.current_bidder_id) youLead = true;
   }
 
   return json({
@@ -45,6 +50,7 @@ export async function onRequestGet(ctx) {
     currentBid: a.current_bid,
     bidCount: a.bid_count,
     leader,
+    youLead,
     opensAt: a.opens_at,
     closesAt: a.closes_at,
     // serverTime lets the client run an accurate countdown even if the

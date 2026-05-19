@@ -124,6 +124,7 @@ import Layout from '../layouts/Layout.astro';
       var pendingEmail = '';
       var bidArmed = false;
       var armTimer = null;
+      var msgTimer = null;
 
       var $ = function (id) { return document.getElementById(id); };
       var money = function (n) { return '\u00A3' + Number(n || 0).toLocaleString('en-GB'); };
@@ -135,11 +136,15 @@ import Layout from '../layouts/Layout.astro';
       function show(id, on) { $(id).style.display = on ? 'block' : 'none'; }
 
       function showMsg(text, kind) {
+        if (msgTimer) { clearTimeout(msgTimer); msgTimer = null; }
         var m = $('msg');
         m.textContent = text;
         m.className = 'msg show ' + kind;
       }
-      function clearMsg() { $('msg').className = 'msg'; }
+      function clearMsg() {
+        if (msgTimer) { clearTimeout(msgTimer); msgTimer = null; }
+        $('msg').className = 'msg';
+      }
 
       function disarm() {
         bidArmed = false;
@@ -208,11 +213,13 @@ import Layout from '../layouts/Layout.astro';
         var sub = '';
         if (hasBids) {
           sub = state.bidCount + ' bid' + (state.bidCount === 1 ? '' : 's');
-          if (state.leader) sub += '  \u00B7  high bidder ' + state.leader;
+          if (state.youLead) sub += '  \u00B7  you are the high bidder';
+          else if (state.leader) sub += '  \u00B7  high bidder ' + state.leader;
         } else {
           sub = phase === 'live' ? 'No bids yet — be the first' : 'No bids yet';
         }
         $('bidSub').textContent = sub;
+        $('bidSub').style.color = state.youLead ? 'var(--ok)' : '';
 
         $('rules').innerHTML =
           'Minimum increment ' + money(state.minIncrement) + '  \u00B7  ' +
@@ -446,7 +453,8 @@ import Layout from '../layouts/Layout.astro';
           });
           var data = await res.json();
           if (data.ok) {
-            showMsg('You are the high bidder at ' + money(data.currentBid) + '.', 'ok');
+            showMsg('Bid placed — you are the high bidder at ' + money(data.currentBid) + '.', 'ok');
+            msgTimer = setTimeout(clearMsg, 6000);
             // Clear so the next poll re-fills with the new minimum.
             $('f-amount').value = '';
           } else if (data.error === 'not_verified') {
