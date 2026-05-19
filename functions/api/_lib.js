@@ -84,19 +84,26 @@ export function phaseOf(a) {
 const FROM = 'Dave Sharp Auction <auction@davesharp.art>';
 const REPLY_TO = 'auction@davesharp.art';
 
-export async function sendEmail(env, { to, subject, html, text }) {
+// BCC'd on the winner email only — the operator gets a copy confirming the
+// email was sent and to which address. Edit here + redeploy to change.
+const WIN_EMAIL_BCC = 'ben@halfgreybear.com';
+
+export async function sendEmail(env, { to, subject, html, text, bcc }) {
   if (!env.RESEND_API_KEY) {
-    console.warn('RESEND_API_KEY not set — email skipped:', subject);
+    console.warn('RESEND_API_KEY not set — email skipped:', subject,
+      '| to=' + to + (bcc ? ' bcc=' + bcc : ''));
     return false;
   }
   try {
+    const payload = { from: FROM, to: [to], reply_to: REPLY_TO, subject, html, text };
+    if (bcc) payload.bcc = [bcc];
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from: FROM, to: [to], reply_to: REPLY_TO, subject, html, text }),
+      body: JSON.stringify(payload),
     });
     if (!r.ok) {
       console.error('Resend send failed', r.status, await r.text());
@@ -271,7 +278,7 @@ export async function finalizeIfClosed(env, request, ctx) {
 
   const url = new URL(request.url).origin;
   const mail = winEmailContent(a.current_bid, a.painting_title, url);
-  const p = sendEmail(env, { to: winner.email, ...mail });
+  const p = sendEmail(env, { to: winner.email, bcc: WIN_EMAIL_BCC, ...mail });
   if (ctx && ctx.waitUntil) ctx.waitUntil(p);
   else await p;
 }
