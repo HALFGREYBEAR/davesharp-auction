@@ -363,6 +363,19 @@ textarea:focus, select:focus { outline: none; border-color: var(--accent); }
 .link-btn:hover { text-decoration: underline; }
 .admin .msg { margin: 0; }
 
+/* danger zone — start a new auction (reset) */
+.admin-danger { border-color: rgba(232,82,60,0.34); }
+.admin-danger .admin-h { color: var(--accent-2); }
+.admin-danger-text {
+  font-size: 13.5px; line-height: 1.6;
+  color: var(--fg-soft); margin-bottom: 18px;
+}
+.admin-danger-text strong { color: var(--fg); font-weight: 600; }
+.admin-reset .btn { width: auto; padding: 13px 22px; }
+.admin-reset .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.admin-reset-confirm { max-width: 340px; }
+.admin-reset-row { display: flex; align-items: center; gap: 16px; }
+
 @media (max-width: 720px) {
   .admin-stats { grid-template-columns: repeat(2, 1fr); }
   .admin-grid, .admin-grid.three { grid-template-columns: 1fr; }

@@ -156,6 +156,31 @@ import Layout from '../../layouts/Layout.astro';
         </table>
       </div>
     </section>
+
+    <!-- Start a new auction -->
+    <section class="admin-card admin-danger">
+      <h2 class="admin-h">Start a new auction</h2>
+      <p class="admin-danger-text">
+        This permanently deletes <strong>every bid, every registered bidder and
+        all login sessions</strong>, and resets the auction to a hidden draft.
+        Any bans are cleared too. It cannot be undone — only run it once the
+        current auction has closed and you have recorded the result. Bidding
+        must be closed first.
+      </p>
+      <div class="admin-reset">
+        <button class="btn btn-danger" id="resetBtn" type="button">Start new auction…</button>
+        <div class="admin-reset-confirm" id="resetConfirm" hidden>
+          <div class="field">
+            <label for="resetWord">Type RESET to confirm</label>
+            <input type="text" id="resetWord" autocomplete="off" placeholder="RESET" />
+          </div>
+          <div class="admin-reset-row">
+            <button class="btn btn-danger" id="resetGo" type="button" disabled>Wipe &amp; reset auction</button>
+            <button class="link-btn" id="resetCancel" type="button">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script is:inline>
@@ -380,9 +405,45 @@ import Layout from '../../layouts/Layout.astro';
         }
       }
 
+      function showReset(show) {
+        $('resetConfirm').hidden = !show;
+        $('resetBtn').hidden = show;
+        if (show) {
+          $('resetWord').value = '';
+          $('resetGo').disabled = true;
+          $('resetWord').focus();
+        }
+      }
+
+      async function doReset() {
+        var go = $('resetGo');
+        go.disabled = true;
+        go.textContent = 'Resetting…';
+        var r = await post('/api/admin/reset', { confirm: 'RESET' });
+        go.textContent = 'Wipe & reset auction';
+        if (r.ok && r.data.ok) {
+          showReset(false);
+          configLoaded = false; // re-fill the config form from the reset row
+          showMsg('Auction reset. Set up the new auction above, then make it live.', 'ok');
+          load();
+        } else if (r.data.error === 'auction_live') {
+          go.disabled = false;
+          showMsg('Bidding is still live — close the auction before resetting.', 'err');
+        } else {
+          go.disabled = false;
+          showMsg('Could not reset the auction. Please try again.', 'err');
+        }
+      }
+
       $('configForm').addEventListener('submit', saveConfig);
       $('closeBtn').addEventListener('click', closeNow);
       $('extendBtn').addEventListener('click', extend);
+      $('resetBtn').addEventListener('click', function () { showReset(true); });
+      $('resetCancel').addEventListener('click', function () { showReset(false); });
+      $('resetWord').addEventListener('input', function () {
+        $('resetGo').disabled = $('resetWord').value.trim() !== 'RESET';
+      });
+      $('resetGo').addEventListener('click', doReset);
 
       load();
       setInterval(load, POLL_MS);
