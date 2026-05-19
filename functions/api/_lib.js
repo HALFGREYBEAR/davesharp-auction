@@ -113,52 +113,108 @@ function gbp(n) {
   return '\u00A3' + Number(n || 0).toLocaleString('en-GB');
 }
 
+// Email type stacks — no serif anywhere. MONO is used only for the code digits.
+const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const MONO = "'SF Mono',SFMono-Regular,ui-monospace,Menlo,Consolas,monospace";
+
+// Dark, branded email frame matching the auction site.
 function shell(inner) {
-  return `<!doctype html><html><body style="margin:0;background:#f4f1ea;padding:30px 0;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-<table role="presentation" width="468" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e3ddd0;">
-<tr><td style="background:#0c0b09;padding:20px 26px;">
-<div style="font-family:Georgia,serif;font-weight:bold;font-size:18px;color:#ede5d4;letter-spacing:.02em;">DAVE SHARP</div>
-<div style="font-size:10px;letter-spacing:.26em;color:#f4a82a;text-transform:uppercase;margin-top:3px;">Live Auction</div>
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+</head>
+<body style="margin:0;padding:0;background-color:#0c0b09;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0c0b09" style="background-color:#0c0b09;">
+<tr><td align="center" style="padding:34px 14px;">
+<table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:520px;background-color:#15130f;border:1px solid #2a2620;">
+<tr><td style="padding:32px 36px 26px 36px;border-bottom:1px solid #2a2620;">
+<div style="font-family:${SANS};font-weight:800;font-size:25px;letter-spacing:0.16em;color:#ede5d4;line-height:1;">DAVE&nbsp;SHARP</div>
+<div style="font-family:${MONO};font-weight:400;font-size:10px;letter-spacing:0.34em;color:#f4a82a;margin-top:11px;">LIVE&nbsp;AUCTION</div>
 </td></tr>
-<tr><td style="padding:26px;color:#2a2722;font-size:15px;line-height:1.6;">${inner}</td></tr>
-<tr><td style="padding:15px 26px;border-top:1px solid #e3ddd0;font-size:12px;color:#8a8273;">
-Reply to this email with any questions — a real person will see it.
+<tr><td style="padding:34px 36px 36px 36px;">
+${inner}
 </td></tr>
-</table></td></tr></table></body></html>`;
+<tr><td style="padding:22px 36px 28px 36px;border-top:1px solid #2a2620;font-family:${SANS};font-size:12px;line-height:1.65;color:#6f685b;">
+Reply to this email with any questions — a real person sees it.<br>
+Dave Sharp — original artwork &amp; live painting
+</td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+// Inner-content builders.
+function eyebrow(text, color) {
+  return `<div style="font-family:${MONO};font-size:10px;font-weight:400;letter-spacing:0.26em;text-transform:uppercase;color:${color};margin:0 0 12px 0;">${text}</div>`;
+}
+function headline(text) {
+  return `<div style="font-family:${SANS};font-weight:800;font-size:27px;line-height:1.14;letter-spacing:-0.015em;color:#ede5d4;margin:0 0 14px 0;">${text}</div>`;
+}
+function para(text) {
+  return `<p style="font-family:${SANS};font-size:15px;line-height:1.66;color:#c4bba8;margin:0 0 18px 0;">${text}</p>`;
+}
+function note(text) {
+  return `<p style="font-family:${SANS};font-size:12.5px;line-height:1.6;color:#6f685b;margin:20px 0 0 0;">${text}</p>`;
+}
+function bigAmount(text) {
+  return `<div style="font-family:${SANS};font-weight:800;font-size:46px;line-height:1;letter-spacing:-0.02em;color:#f4a82a;margin:6px 0 4px 0;">${text}</div>`;
+}
+function button(label, url) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 2px 0;">
+<tr><td bgcolor="#f4a82a" style="background-color:#f4a82a;border-radius:100px;">
+<a href="${url}" style="display:inline-block;font-family:${SANS};font-weight:700;font-size:13px;letter-spacing:0.03em;color:#0c0b09;text-decoration:none;padding:15px 32px;">${label}</a>
+</td></tr></table>`;
 }
 
 export function verifyEmailContent(code) {
   return {
     subject: `Your auction code: ${code}`,
-    text: `Your Dave Sharp auction verification code is ${code}. It expires in 15 minutes.`,
-    html: shell(`
-      <p style="margin:0 0 14px;">Here is your code to verify your email and bid in the auction:</p>
-      <div style="font-size:32px;font-weight:bold;letter-spacing:.14em;color:#0c0b09;background:#f4f1ea;border-radius:6px;padding:16px;text-align:center;">${code}</div>
-      <p style="margin:14px 0 0;color:#8a8273;font-size:13px;">This code expires in 15 minutes. If you didn't request it, you can ignore this email.</p>`),
+    text: `Your Dave Sharp auction verification code is ${code}. It expires in 15 minutes. If you didn't request it, ignore this email.`,
+    html: shell(
+      headline('Verify your email') +
+      para('Enter this code on the auction page to confirm your email and start bidding.') +
+      eyebrow('Your code', '#8a8273') +
+      `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 4px 0;">
+<tr><td align="center" bgcolor="#0c0b09" style="background-color:#0c0b09;border:1px solid #3a342a;padding:28px 14px;">
+<div style="font-family:${MONO};font-weight:700;font-size:42px;letter-spacing:0.16em;color:#f4a82a;line-height:1;">${code}</div>
+</td></tr></table>` +
+      note("This code expires in 15 minutes. If you didn't request it, you can safely ignore this email.")
+    ),
   };
 }
 
 export function outbidEmailContent(currentBid, url) {
   return {
     subject: `You've been outbid — Dave Sharp auction`,
-    text: `Someone has placed a higher bid. The current bid is now ${gbp(currentBid)}. Place a new bid: ${url}`,
-    html: shell(`
-      <p style="margin:0 0 12px;">You've been outbid. The current bid is now:</p>
-      <div style="font-size:30px;font-weight:bold;color:#0c0b09;">${gbp(currentBid)}</div>
-      <p style="margin:14px 0 20px;">There's still time to place a higher bid.</p>
-      <a href="${url}" style="display:inline-block;background:#f4a82a;color:#0c0b09;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:100px;font-size:14px;">Place a new bid</a>`),
+    text: `You've been outbid. The current bid is now ${gbp(currentBid)}. Place a higher bid: ${url}`,
+    html: shell(
+      headline("You've been outbid") +
+      para('Someone has placed a higher bid. The current bid now stands at:') +
+      bigAmount(gbp(currentBid)) +
+      button('Place a higher bid', url) +
+      note('A bid in the final 10 minutes extends the close — so there is still time to win it.')
+    ),
   };
 }
 
 export function winEmailContent(amount, title, url) {
   return {
     subject: `You won — Dave Sharp auction`,
-    text: `Congratulations — your bid of ${gbp(amount)} won "${title}". You'll receive an invoice by email to complete the purchase. Reply with any questions.`,
-    html: shell(`
-      <p style="margin:0 0 12px;">Congratulations — you won the auction for <strong>${title}</strong> with a winning bid of:</p>
-      <div style="font-size:30px;font-weight:bold;color:#0c0b09;">${gbp(amount)}</div>
-      <p style="margin:14px 0 0;">You'll receive an invoice by email shortly to complete the purchase. Reply to this email with any questions.</p>`),
+    text: `Congratulations — your winning bid of ${gbp(amount)} took "${title}". You'll receive an invoice by email shortly to complete the purchase.`,
+    html: shell(
+      eyebrow('Auction won', '#f4a82a') +
+      headline("Congratulations — it's yours") +
+      para(`The winning bid on <strong style="color:#ede5d4;font-weight:700;">${title}</strong> is:`) +
+      bigAmount(gbp(amount)) +
+      para("You'll receive an invoice by email shortly to complete the purchase.") +
+      note('Any questions? Just reply to this email.')
+    ),
   };
 }
 
