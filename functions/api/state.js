@@ -36,6 +36,17 @@ export async function onRequestGet(ctx) {
     if (viewer && viewer.id === a.current_bidder_id) youLead = true;
   }
 
+  // Cache-bust the image URL with the auction's updated_at timestamp so
+  // browsers + the CF edge fetch fresh bytes whenever the admin saves a
+  // new painting — even if the filename is reused.
+  let imageUrl = a.image_path || null;
+  if (imageUrl && a.updated_at) {
+    const v = Date.parse(a.updated_at);
+    if (Number.isFinite(v)) {
+      imageUrl += (imageUrl.includes('?') ? '&' : '?') + 'v=' + v;
+    }
+  }
+
   return json({
     phase,
     painting: {
@@ -43,7 +54,7 @@ export async function onRequestGet(ctx) {
       size: a.size,
       medium: a.medium,
       story: a.story,
-      image: a.image_path,
+      image: imageUrl,
     },
     currency: a.currency,
     startingBid: a.starting_bid,
