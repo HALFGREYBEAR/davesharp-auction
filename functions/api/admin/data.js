@@ -1,7 +1,7 @@
 // GET /api/admin/data — full auction config, bid history, bidder list.
 // Protected by Cloudflare Access (see README).
 
-import { json, accessOk, phaseOf, finalizeIfClosed } from '../_lib.js';
+import { json, accessOk, phaseOf, finalizeIfClosed, adminEmailFromRequest } from '../_lib.js';
 
 export async function onRequestGet(ctx) {
   const { env, request } = ctx;
@@ -26,8 +26,9 @@ export async function onRequestGet(ctx) {
 
   // The Cloudflare Access-authenticated admin email, surfaced to the UI
   // so the "Send test to me" button can confirm the destination before
-  // firing. Empty string on localhost (no Access header).
-  const adminEmail = request.headers.get('Cf-Access-Authenticated-User-Email') || '';
+  // firing. Reads the convenience header if present, otherwise the JWT
+  // payload. Empty string on localhost (no Access header / JWT).
+  const adminEmail = adminEmailFromRequest(request);
 
   return json({ auction, phase: phaseOf(auction), bids, bidders, adminEmail });
 }

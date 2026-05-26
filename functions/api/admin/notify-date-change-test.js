@@ -12,14 +12,16 @@
 //
 // Protected by Cloudflare Access. Returns { ok, to }.
 
-import { json, accessOk, sendEmail, dateChangeEmailContent } from '../_lib.js';
+import { json, accessOk, sendEmail, dateChangeEmailContent, adminEmailFromRequest } from '../_lib.js';
 
 export async function onRequestPost({ env, request }) {
   if (!accessOk(request)) return json({ error: 'forbidden' }, 403);
 
-  // Recipient: the Cloudflare Access-authenticated admin email. Falls
-  // back to a body-supplied address on localhost where Access doesn't run.
-  let to = (request.headers.get('Cf-Access-Authenticated-User-Email') || '').trim();
+  // Recipient: the Cloudflare Access-authenticated admin email — taken
+  // from either the convenience header or, if that isn't populated, the
+  // JWT payload. Falls back to a body-supplied address on localhost
+  // where Access doesn't run.
+  let to = adminEmailFromRequest(request);
   if (!to) {
     try {
       const body = await request.json();

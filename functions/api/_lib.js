@@ -62,6 +62,28 @@ export function accessOk(request) {
   return host === 'localhost' || host === '127.0.0.1';
 }
 
+// Returns the Access-authenticated admin's email, or '' if none.
+// Tries the convenience header first (`Cf-Access-Authenticated-User-Email`);
+// some Access configurations don't populate it, so falls back to decoding
+// the JWT payload directly — Cloudflare has already verified its signature
+// before forwarding it, so we just need to read the `email` claim.
+export function adminEmailFromRequest(request) {
+  const direct = (request.headers.get('Cf-Access-Authenticated-User-Email') || '').trim();
+  if (direct) return direct;
+  const jwt = request.headers.get('Cf-Access-Jwt-Assertion');
+  if (!jwt) return '';
+  try {
+    const parts = jwt.split('.');
+    if (parts.length !== 3) return '';
+    let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    b64 += '='.repeat((4 - (b64.length % 4)) % 4);
+    const payload = JSON.parse(atob(b64));
+    return String(payload.email || '').trim();
+  } catch {
+    return '';
+  }
+}
+
 // ---- Auction phase ---------------------------------------------------------
 
 export function firstName(name) {
