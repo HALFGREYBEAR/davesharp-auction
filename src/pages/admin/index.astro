@@ -120,6 +120,16 @@ import Layout from '../../layouts/Layout.astro';
         </div>
         <div class="admin-control">
           <div class="admin-control-text">
+            <strong>Notify bidders of date change</strong>
+            <span>Emails every verified bidder the current closing time. Use after bringing the auction in or pushing it out — Save the new date first. The Test button sends just to you (<span id="notifyTestTarget">your admin email</span>) so you can preview the real email before pressing Send to all.</span>
+          </div>
+          <div class="admin-control-action">
+            <button class="btn btn-ghost" id="notifyTestBtn">Send test to me</button>
+            <button class="btn btn-ghost" id="notifyDateBtn">Send to all bidders</button>
+          </div>
+        </div>
+        <div class="admin-control">
+          <div class="admin-control-text">
             <strong>Close the auction now</strong>
             <span>Ends bidding immediately and emails the winning bidder.</span>
           </div>
@@ -232,6 +242,10 @@ import Layout from '../../layouts/Layout.astro';
           var lead = (d.bidders || []).find(function (b) { return b.id === a.current_bidder_id; });
           if (lead) $('sLeader').textContent = lead.name;
         }
+        // Show the Access-authenticated admin email next to the Test button
+        // so the operator can confirm where the test will land. Empty on localhost.
+        var t = $('notifyTestTarget');
+        if (t) t.textContent = d.adminEmail ? d.adminEmail : 'your admin email';
       }
 
       function fillConfig(a) {
@@ -383,6 +397,35 @@ import Layout from '../../layouts/Layout.astro';
         else showMsg('Could not extend the auction.', 'err');
       }
 
+      async function notifyDateChange() {
+        if (!confirm('Email all verified bidders that the auction closing time has changed?\n\nThis sends the *current* closing time from the configuration — Save the new date first if you haven\'t.')) return;
+        var btn = $('notifyDateBtn');
+        btn.disabled = true; btn.textContent = 'Sending…';
+        var r = await post('/api/admin/notify-date-change', {});
+        btn.disabled = false; btn.textContent = 'Send to all bidders';
+        if (r.ok && r.data.ok) {
+          var summary = 'Sent to ' + r.data.sent + ' of ' + r.data.total + ' bidders';
+          if (r.data.failed) summary += ' — ' + r.data.failed + ' failed';
+          showMsg(summary, r.data.failed ? 'err' : 'ok');
+        } else {
+          showMsg('Could not send notifications. Check that the auction exists and Resend is configured.', 'err');
+        }
+      }
+
+      async function notifyDateChangeTest() {
+        var btn = $('notifyTestBtn');
+        btn.disabled = true; btn.textContent = 'Sending…';
+        var r = await post('/api/admin/notify-date-change-test', {});
+        btn.disabled = false; btn.textContent = 'Send test to me';
+        if (r.ok && r.data.ok) {
+          showMsg('Test email sent to ' + r.data.to + '. Check your inbox.', 'ok');
+        } else if (r.data && r.data.error === 'no_admin_email') {
+          showMsg('No Cloudflare Access email on this request. Are you sure you\'re authenticated?', 'err');
+        } else {
+          showMsg('Could not send the test email. Check Resend is configured.', 'err');
+        }
+      }
+
       async function voidBid(id) {
         if (!confirm('Void bid #' + id + '? The auction rolls back to the next-highest bidder.')) return;
         var r = await post('/api/admin/void-bid', { bidId: Number(id) });
@@ -438,6 +481,8 @@ import Layout from '../../layouts/Layout.astro';
       $('configForm').addEventListener('submit', saveConfig);
       $('closeBtn').addEventListener('click', closeNow);
       $('extendBtn').addEventListener('click', extend);
+      $('notifyDateBtn').addEventListener('click', notifyDateChange);
+      $('notifyTestBtn').addEventListener('click', notifyDateChangeTest);
       $('resetBtn').addEventListener('click', function () { showReset(true); });
       $('resetCancel').addEventListener('click', function () { showReset(false); });
       $('resetWord').addEventListener('input', function () {

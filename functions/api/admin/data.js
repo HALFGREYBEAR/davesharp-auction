@@ -24,5 +24,10 @@ export async function onRequestGet(ctx) {
        FROM bidders ORDER BY id DESC`
   ).all()).results || [];
 
-  return json({ auction, phase: phaseOf(auction), bids, bidders });
+  // The Cloudflare Access-authenticated admin email, surfaced to the UI
+  // so the "Send test to me" button can confirm the destination before
+  // firing. Empty string on localhost (no Access header).
+  const adminEmail = request.headers.get('Cf-Access-Authenticated-User-Email') || '';
+
+  return json({ auction, phase: phaseOf(auction), bids, bidders, adminEmail });
 }

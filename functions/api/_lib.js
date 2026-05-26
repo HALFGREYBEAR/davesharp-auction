@@ -210,6 +210,47 @@ export function outbidEmailContent(currentBid, url) {
   };
 }
 
+// Formats an ISO close time as e.g. "Wednesday 28 May at 8:00 pm BST",
+// using London time. Falls back to the raw ISO if Intl rejects the input.
+function formatCloseTime(iso) {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d)) return iso;
+    return new Intl.DateTimeFormat('en-GB', {
+      weekday: 'long', day: 'numeric', month: 'long',
+      hour: 'numeric', minute: '2-digit', hour12: true,
+      timeZone: 'Europe/London', timeZoneName: 'short',
+    }).format(d);
+  } catch {
+    return iso;
+  }
+}
+
+export function dateChangeEmailContent(closesAtIso, currentBid, title, url) {
+  const closesHuman = formatCloseTime(closesAtIso);
+  const bidLine = Number(currentBid) > 0
+    ? `The current bid stands at <strong style="color:#ede5d4;font-weight:700;">${gbp(currentBid)}</strong>. Bidding remains open right up to the new closing time.`
+    : 'No bids have been placed yet — bidding remains open right up to the new closing time.';
+  const bidLineText = Number(currentBid) > 0
+    ? `The current bid stands at ${gbp(currentBid)}. Bidding remains open right up to the new closing time.`
+    : 'No bids have been placed yet — bidding remains open right up to the new closing time.';
+  // Date callout — same visual weight as bigAmount() but sized to fit a sentence.
+  const dateCallout = `<div style="font-family:${SANS};font-weight:800;font-size:22px;line-height:1.25;letter-spacing:-0.01em;color:#f4a82a;margin:6px 0 14px 0;">${closesHuman}</div>`;
+  return {
+    subject: `Auction closing time updated — Dave Sharp`,
+    text: `The closing time for "${title}" has been updated to ${closesHuman}. ${bidLineText} View the auction: ${url}`,
+    html: shell(
+      eyebrow('Auction update', '#f4a82a') +
+      headline('The closing time has changed') +
+      para(`The closing time for <strong style="color:#ede5d4;font-weight:700;">${title}</strong> has been updated to:`) +
+      dateCallout +
+      para(bidLine) +
+      button('View the auction', url) +
+      note('A bid in the final 10 minutes still extends the close by 10 minutes — there is time to win it.')
+    ),
+  };
+}
+
 export function winEmailContent(amount, title, url) {
   return {
     subject: `You won — Dave Sharp auction`,
