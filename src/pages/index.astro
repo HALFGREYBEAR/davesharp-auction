@@ -5,9 +5,12 @@ const year = new Date().getFullYear();
 
 <Layout>
   <header class="bar">
-    <div class="bar-mark">
-      Dave Sharp
-      <span>Live Auction</span>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <img src="/ds-mark.svg" alt="" style="height: 32px; width: auto; display: block;" />
+      <div class="bar-mark">
+        Dave Sharp
+        <span>Live Auction</span>
+      </div>
     </div>
     <div class="bar-live" id="liveFlag">
       <span class="dot"></span><span id="liveLabel">Loading</span>
